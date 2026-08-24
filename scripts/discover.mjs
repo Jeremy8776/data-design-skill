@@ -5,14 +5,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mapLocalCompany } from './lib/map-local.mjs';
 
-export const CASE_SCHEMA_VERSION = '0.3.0';
+export const CASE_SCHEMA_VERSION = '0.4.0';
 export const SNAPSHOT_VERSION = '0.1.0';
-const SUPPORTED_CASE_SCHEMA_VERSIONS = new Set(['0.2.0', CASE_SCHEMA_VERSION]);
+const SUPPORTED_CASE_SCHEMA_VERSIONS = new Set(['0.2.0', '0.3.0', CASE_SCHEMA_VERSION]);
 
 const CAPABILITY_STATES = new Set(['available', 'partial', 'unavailable', 'unknown', 'not-requested']);
 const COVERAGE_STATES = new Set(['complete', 'partial', 'sampled', 'unknown']);
 const COLLECTION_METHODS = new Set(['native-read-only', 'connector-read-only', 'synced-folder', 'export', 'manual', 'unknown']);
 const CONTENT_STATES = new Set(['available', 'partial', 'metadata-only', 'unavailable', 'not-requested']);
+const CONCEPT_ROUND_STATES = new Set(['open', 'selected', 'superseded', 'rejected', 'deferred']);
+const CONCEPT_ORIGINS = new Set(['model-proposed', 'architect-proposed']);
 
 const SENSITIVITY_RULES = [
   ['personal-data', /\b(passport|driving licen[cs]e|date of birth|dob|personal data|employee record|medical)\b/i],
@@ -110,6 +112,46 @@ function authorityKey(record) {
 
 function assertObject(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object.`);
+}
+
+function assertNonEmptyString(value, label) {
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`${label} must be a non-empty string.`);
+}
+
+function assertStringArray(value, label) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) throw new Error(`${label} must be an array of strings.`);
+}
+
+function validateConceptRound(round, index, references) {
+  const label = `case.conceptRounds[${index}]`;
+  assertObject(round, label);
+  for (const key of ['id', 'createdAt', 'trigger', 'status', 'evidenceState']) assertNonEmptyString(round[key], `${label}.${key}`);
+  if (!CONCEPT_ROUND_STATES.has(round.status)) throw new Error(`${label}.status has an invalid state.`);
+  if (round.evidenceState !== 'model-proposed') throw new Error(`${label}.evidenceState must be model-proposed.`);
+  if (typeof round.steer !== 'string') throw new Error(`${label}.steer must be a string.`);
+  if (!Array.isArray(round.concepts) || !round.concepts.length) throw new Error(`${label}.concepts must contain at least one concept.`);
+  const conceptIds = new Set();
+  for (let conceptIndex = 0; conceptIndex < round.concepts.length; conceptIndex++) {
+    const concept = round.concepts[conceptIndex];
+    const conceptLabel = `${label}.concepts[${conceptIndex}]`;
+    assertObject(concept, conceptLabel);
+    for (const key of ['id', 'name', 'thesis', 'problem', 'peopleChange', 'smallestIntervention', 'distinctFromOthers', 'origin']) assertNonEmptyString(concept[key], `${conceptLabel}.${key}`);
+    if (conceptIds.has(concept.id)) throw new Error(`${label} contains duplicate concept id ${concept.id}.`);
+    conceptIds.add(concept.id);
+    if (!CONCEPT_ORIGINS.has(concept.origin)) throw new Error(`${conceptLabel}.origin has an invalid state.`);
+    assertObject(concept.evidence, `${conceptLabel}.evidence`);
+    for (const key of ['observationIds', 'answerIds', 'recordIds']) assertStringArray(concept.evidence[key], `${conceptLabel}.evidence.${key}`);
+    for (const [key, knownIds] of Object.entries(references)) {
+      for (const referenceId of concept.evidence[key]) {
+        if (!knownIds.has(referenceId)) throw new Error(`${conceptLabel}.evidence.${key} references unknown id ${referenceId}.`);
+      }
+    }
+    for (const key of ['assumptions', 'dependencies', 'integrations', 'benefits', 'tradeOffs', 'killCriteria']) assertStringArray(concept[key], `${conceptLabel}.${key}`);
+    for (const key of ['operatingBurden', 'costShape', 'lockIn', 'portability', 'reversibility']) {
+      if (typeof concept[key] !== 'string') throw new Error(`${conceptLabel}.${key} must be a string.`);
+    }
+  }
+  return conceptIds;
 }
 
 function validateSource(source) {
@@ -377,6 +419,8 @@ function emptyCase(caseName) {
     observations: [],
     questions: [],
     answers: [],
+    conceptRounds: [],
+    conceptDecision: null,
     structure: null,
     scanPolicy: null,
     indexes: [],
@@ -404,6 +448,8 @@ export function ingestSnapshot(snapshot, existingCase = null, options = {}) {
   validateSnapshot(snapshot);
   const result = existingCase ? structuredClone(existingCase) : emptyCase(options.caseName || snapshot.source.displayName);
   if (existingCase) validateCase(result);
+  result.conceptRounds ??= [];
+  result.conceptDecision ??= null;
   const previousObservations = new Map(result.observations.map((observation) => [`${observation.type}::${observation.title}`, observation]));
   const previousQuestions = new Map(result.questions.map((question) => [question.title, question]));
 
@@ -458,13 +504,15 @@ export function ingestSnapshot(snapshot, existingCase = null, options = {}) {
 
 export function validateCase(caseFile) {
   assertObject(caseFile, 'case');
-  if (!SUPPORTED_CASE_SCHEMA_VERSIONS.has(caseFile.schemaVersion)) throw new Error(`schemaVersion must be 0.2.0 or ${CASE_SCHEMA_VERSION}.`);
+  if (!SUPPORTED_CASE_SCHEMA_VERSIONS.has(caseFile.schemaVersion)) throw new Error(`schemaVersion must be one of: ${[...SUPPORTED_CASE_SCHEMA_VERSIONS].join(', ')}.`);
   for (const key of ['caseId', 'caseName', 'createdAt', 'updatedAt']) {
     if (typeof caseFile[key] !== 'string' || !caseFile[key].trim()) throw new Error(`case.${key} must be a non-empty string.`);
   }
   for (const key of ['sources', 'records', 'observations', 'questions', 'answers']) {
     if (!Array.isArray(caseFile[key])) throw new Error(`case.${key} must be an array.`);
   }
+  if (caseFile.conceptRounds != null && !Array.isArray(caseFile.conceptRounds)) throw new Error('case.conceptRounds must be an array when present.');
+  if (caseFile.conceptDecision != null) assertObject(caseFile.conceptDecision, 'case.conceptDecision');
   assertObject(caseFile.thesis, 'case.thesis');
   assertObject(caseFile.coverage, 'case.coverage');
   assertObject(caseFile.provenance, 'case.provenance');
@@ -483,6 +531,25 @@ export function validateCase(caseFile) {
   for (const observation of caseFile.observations) {
     for (const recordId of observation.recordIds ?? []) {
       if (!recordIds.has(recordId)) throw new Error(`Observation ${observation.id} references unknown record ${recordId}.`);
+    }
+  }
+  const observationIds = new Set(caseFile.observations.map((observation) => observation.id).filter(Boolean));
+  const answerIds = new Set(caseFile.answers.map((answer) => answer.id).filter(Boolean));
+  const conceptIds = new Set();
+  for (let index = 0; index < (caseFile.conceptRounds ?? []).length; index++) {
+    for (const conceptId of validateConceptRound(caseFile.conceptRounds[index], index, {
+      observationIds,
+      answerIds,
+      recordIds,
+    })) {
+      if (conceptIds.has(conceptId)) throw new Error(`Duplicate concept id across rounds: ${conceptId}.`);
+      conceptIds.add(conceptId);
+    }
+  }
+  if (caseFile.conceptDecision?.selectedConceptIds != null) {
+    assertStringArray(caseFile.conceptDecision.selectedConceptIds, 'case.conceptDecision.selectedConceptIds');
+    for (const conceptId of caseFile.conceptDecision.selectedConceptIds) {
+      if (!conceptIds.has(conceptId)) throw new Error(`case.conceptDecision references unknown concept ${conceptId}.`);
     }
   }
   return { valid: true, kind: 'portable-case', sourceCount: caseFile.sources.length, recordCount: caseFile.records.length };
@@ -578,6 +645,18 @@ export function renderMarkdownReport(caseFile) {
   for (const answer of caseFile.answers) {
     lines.push(`### ${markdownEscape(answer.questionTitle || answer.questionId || 'Attributed answer')}`, '', answer.answer || '_No answer text recorded._', '', `**Answered by:** ${markdownEscape(answer.answeredBy || 'Unattributed')}  `, `**Answered at:** ${markdownEscape(answer.answeredAt || 'Not recorded')}  `, `**State:** ${markdownEscape(answer.evidenceState || 'human-verified')}`, '');
   }
+  lines.push('## Concept round', '');
+  const latestConceptRound = caseFile.conceptRounds?.at(-1);
+  if (!latestConceptRound) {
+    lines.push('_No concept round has been drafted._', '');
+  } else {
+    lines.push(`**Round:** ${markdownEscape(latestConceptRound.id)}  `, `**Status:** ${markdownEscape(latestConceptRound.status)}  `, `**Steer:** ${markdownEscape(latestConceptRound.steer || 'None')}`, '');
+    for (const concept of latestConceptRound.concepts) {
+      const evidenceIds = [...concept.evidence.observationIds, ...concept.evidence.answerIds, ...concept.evidence.recordIds];
+      lines.push(`### ${markdownEscape(concept.name)}`, '', concept.thesis, '', `**Smallest intervention:** ${markdownEscape(concept.smallestIntervention)}  `, `**People change:** ${markdownEscape(concept.peopleChange)}  `, `**Operating burden:** ${markdownEscape(concept.operatingBurden || 'Not established')}  `, `**Cost shape:** ${markdownEscape(concept.costShape || 'Not established')}  `, `**Lock-in:** ${markdownEscape(concept.lockIn || 'Not established')}  `, `**Portability:** ${markdownEscape(concept.portability || 'Not established')}  `, `**Reversibility:** ${markdownEscape(concept.reversibility || 'Not established')}`, '', `**Evidence:** ${evidenceIds.length ? evidenceIds.map((id) => `\`${id}\``).join(', ') : 'No evidence linked'}`, '', `**Assumptions:** ${concept.assumptions.length ? concept.assumptions.map(markdownEscape).join('; ') : 'None recorded'}  `, `**Trade-offs:** ${concept.tradeOffs.length ? concept.tradeOffs.map(markdownEscape).join('; ') : 'None recorded'}  `, `**Kill criteria:** ${concept.killCriteria.length ? concept.killCriteria.map(markdownEscape).join('; ') : 'None recorded'}`, '');
+    }
+    if (caseFile.conceptDecision) lines.push(`**Architect decision:** ${markdownEscape(caseFile.conceptDecision.status || 'working')} — ${markdownEscape(caseFile.conceptDecision.rationale || 'No rationale recorded.')}`, '');
+  }
   lines.push('## Source provenance', '', '| Source ID | Scope | Collected | Warnings |', '|---|---|---|---|');
   for (const source of caseFile.sources) {
     lines.push(`| \`${source.id}\` | ${markdownEscape(source.scope)} | ${source.collectedAt} | ${source.coverage.warnings.length ? markdownEscape(source.coverage.warnings.join('; ')) : 'None recorded'} |`);
@@ -616,6 +695,12 @@ export function renderHtmlReport(caseFile) {
           <details><summary>Linked evidence</summary><p class="mono">${escapeHtml([...question.observationIds, ...question.recordIds].join(', ') || 'No linked evidence')}</p></details>
         </article>`).join('') : '<p class="empty">No clarifying questions are open.</p>';
   const answers = caseFile.answers.length ? caseFile.answers.map((answer) => `<article class="observation"><div><span class="evidence-state">${escapeHtml(answer.evidenceState || 'human-verified')}</span></div><h3>${escapeHtml(answer.questionTitle || answer.questionId || 'Attributed answer')}</h3><p>${escapeHtml(answer.answer || 'No answer text recorded.')}</p><p><strong>${escapeHtml(answer.answeredBy || 'Unattributed')}</strong> · ${escapeHtml(answer.answeredAt || 'Time not recorded')}</p></article>`).join('') : '<p>No human answer has been recorded.</p>';
+  const latestConceptRound = caseFile.conceptRounds?.at(-1) ?? null;
+  const selectedConceptIds = new Set(caseFile.conceptDecision?.selectedConceptIds ?? []);
+  const conceptRoundHtml = latestConceptRound ? `<div class="concept-round"><div class="concept-round-head"><h3>Concept round</h3><p>${escapeHtml(latestConceptRound.steer ? `Steer: ${latestConceptRound.steer}` : 'Distinct interventions derived from the current evidence and answers.')}</p></div><div class="concept-grid">${latestConceptRound.concepts.map((concept) => {
+    const evidenceIds = [...concept.evidence.observationIds, ...concept.evidence.answerIds, ...concept.evidence.recordIds];
+    return `<article class="concept-card" data-selected="${selectedConceptIds.has(concept.id)}"><div><span class="evidence-state">${escapeHtml(concept.origin)}</span>${selectedConceptIds.has(concept.id) ? '<span class="severity verified">selected</span>' : ''}</div><h3>${escapeHtml(concept.name)}</h3><p>${escapeHtml(concept.thesis)}</p><dl><div><dt>Smallest intervention</dt><dd>${escapeHtml(concept.smallestIntervention)}</dd></div><div><dt>People change</dt><dd>${escapeHtml(concept.peopleChange)}</dd></div><div><dt>Operating burden</dt><dd>${escapeHtml(concept.operatingBurden || 'Not established')}</dd></div><div><dt>Portability</dt><dd>${escapeHtml(concept.portability || 'Not established')}</dd></div></dl><details><summary>Evidence, assumptions and trade-offs</summary><p><strong>Evidence:</strong> ${escapeHtml(evidenceIds.join(', ') || 'No evidence linked')}</p><p><strong>Assumptions:</strong> ${escapeHtml(concept.assumptions.join('; ') || 'None recorded')}</p><p><strong>Trade-offs:</strong> ${escapeHtml(concept.tradeOffs.join('; ') || 'None recorded')}</p><p><strong>Kill criteria:</strong> ${escapeHtml(concept.killCriteria.join('; ') || 'None recorded')}</p></details></article>`;
+  }).join('')}</div>${caseFile.conceptDecision ? `<p class="concept-decision"><strong>Architect decision:</strong> ${escapeHtml(caseFile.conceptDecision.status || 'working')} · ${escapeHtml(caseFile.conceptDecision.rationale || 'No rationale recorded.')}</p>` : '<p class="concept-decision">No concept has been selected.</p>'}</div>` : '<div class="concept-round empty"><h3>Concept round</h3><p>No concept round has been drafted. Use it only when several materially different interventions remain viable.</p></div>';
   const sortedSegments = caseFile.structure?.segments?.length ? [...caseFile.structure.segments].sort((a, b) => b.fileCount - a.fileCount) : [];
   const maxSegmentFiles = Math.max(1, ...sortedSegments.map((segment) => segment.fileCount));
   const segmentButtons = sortedSegments.map((segment, index) => {
@@ -627,8 +712,20 @@ export function renderHtmlReport(caseFile) {
   const segmentRows = sortedSegments.map((segment) => `<tr><th scope="row">${escapeHtml(segment.name)}</th><td>${segment.fileCount.toLocaleString()}</td><td>${segment.folderCount.toLocaleString()}</td><td>${escapeHtml(formatBytes(segment.totalBytes))}</td><td>${segment.retainedEvidenceCount.toLocaleString()}</td></tr>`).join('');
   const openQuestionCount = caseFile.questions.filter((question) => question.status === 'open').length;
   const thesisReady = ['diagnosticView', 'recommendation', 'risks', 'nextActions'].some((field) => typeof caseFile.thesis[field] === 'string' && caseFile.thesis[field].trim());
-  const statusTitle = thesisReady ? 'The architect thesis is ready for review.' : `${openQuestionCount.toLocaleString()} clarifying ${openQuestionCount === 1 ? 'question remains' : 'questions remain'} before the thesis.`;
-  const statusDetail = thesisReady ? 'Read the conclusion first, then trace it back through the evidence path.' : 'The map and observations are orientation. Human answers should resolve the consequential uncertainty before the report becomes a recommendation.';
+  const statusTitle = thesisReady
+    ? 'The architect thesis is ready for review.'
+    : openQuestionCount
+      ? `${openQuestionCount.toLocaleString()} clarifying ${openQuestionCount === 1 ? 'question remains' : 'questions remain'} before the thesis.`
+      : latestConceptRound
+        ? 'Concept directions are ready for the architect\'s decision.'
+        : 'Clarification is complete. Draft concepts or author the thesis.';
+  const statusDetail = thesisReady
+    ? 'Read the conclusion first, then trace it back through the evidence path.'
+    : openQuestionCount
+      ? 'The map and observations are orientation. Human answers should resolve the consequential uncertainty before the report becomes a recommendation.'
+      : latestConceptRound
+        ? 'Select, combine, steer, defer, or reject the proposals before the final recommendation.'
+        : 'Use a concept round when several interventions remain viable; skip it when the evidence supports only one safe path.';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -637,6 +734,7 @@ export function renderHtmlReport(caseFile) {
   <title>${escapeHtml(caseFile.caseName)} — AI architecture discovery</title>
   <style>
     :root{color-scheme:dark;--ground:#0f1419;--rail:#0b1015;--sheet:#151c23;--sheet-raised:#1a232c;--rule:#2c3944;--rule-strong:#465866;--text:#edf3f5;--muted:#a7b3bb;--blue:#79a7f2;--blue-deep:#356fca;--red:#f08b7e;--green:#66c69b;--amber:#d7a968}*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:108px}body{margin:0;background:var(--ground);color:var(--text);font:15px/1.6 Aptos,"Segoe UI Variable","Segoe UI",sans-serif}::selection{background:var(--blue-deep);color:var(--text)}::-webkit-scrollbar{width:12px;height:12px}::-webkit-scrollbar-track{background:var(--rail)}::-webkit-scrollbar-thumb{background:var(--rule-strong);border:3px solid var(--rail);border-radius:6px}button,a,summary{font:inherit}button{color:inherit}.skip-link{position:fixed;left:16px;top:12px;z-index:20;transform:translateY(-150%);background:var(--text);color:var(--ground);padding:8px 12px;border-radius:3px}.skip-link:focus{transform:none}main{width:min(1160px,calc(100% - 40px));margin:auto;padding:42px 0 80px}.case-header{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(280px,.75fr);gap:40px;align-items:end;padding-bottom:30px;border-bottom:1px solid var(--rule)}h1{font-size:clamp(1.75rem,3vw,2.375rem);line-height:.98;letter-spacing:-.04em;margin:0;max-width:15ch;text-wrap:balance}h2{font-size:1.125rem;line-height:1.08;letter-spacing:-.035em;margin:0;text-wrap:balance}h3{font-size:1.125rem;line-height:1.35;margin:10px 0 8px}p{max-width:72ch;color:var(--muted)}.case-meta{margin:14px 0 0;color:var(--muted);font-size:.875rem}.readiness{border:1px solid var(--rule-strong);background:var(--sheet);padding:18px}.readiness strong{display:block;color:${thesisReady ? 'var(--green)' : 'var(--red)'};font-size:1.125rem;line-height:1.35;margin-bottom:8px}.readiness p{margin:0}.case-spine{position:sticky;top:0;z-index:10;display:grid;grid-template-columns:repeat(4,1fr);margin:0 -12px;background:color-mix(in srgb,var(--rail) 94%,transparent);border-bottom:1px solid var(--rule);padding:0 12px}.case-spine a{position:relative;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:center;min-height:72px;padding:12px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent}.case-spine a:hover,.case-spine a[aria-current="step"]{color:var(--text);border-bottom-color:var(--blue)}.case-spine .step-number{grid-row:1/3;display:grid;place-items:center;width:28px;height:28px;border:1px solid var(--rule-strong);border-radius:50%;font-variant-numeric:tabular-nums}.case-spine a[aria-current="step"] .step-number{background:var(--blue-deep);border-color:var(--blue);color:var(--text)}.case-spine strong{line-height:1.2}.case-spine small{font-size:.75rem;color:inherit}.stage{margin:0;padding:70px 0;border-bottom:1px solid var(--rule)}.stage-heading{display:grid;grid-template-columns:80px minmax(0,1fr);gap:20px;align-items:start;margin-bottom:30px}.stage-index{font-size:.75rem;color:var(--blue);font-variant-numeric:tabular-nums}.stage-heading p{margin:10px 0 0;max-width:64ch}.source-map{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,.65fr);gap:20px;align-items:start}.segment-list{display:grid;gap:5px}.segment-row{appearance:none;width:100%;border:0;background:transparent;padding:8px;text-align:left;cursor:pointer;border-radius:3px}.segment-row:hover,.segment-row[aria-pressed="true"]{background:var(--sheet)}.segment-row:focus-visible,.button:focus-visible,.filter:focus-visible,.question-nav button:focus-visible,.case-spine a:focus-visible,summary:focus-visible{outline:3px solid var(--blue);outline-offset:3px}.segment-label{display:flex;justify-content:space-between;gap:16px;margin-bottom:5px}.segment-label strong{font-size:.875rem}.segment-label span{color:var(--muted);font-variant-numeric:tabular-nums}.segment-track{display:block;height:8px;background:var(--sheet);border:1px solid var(--rule);overflow:hidden}.segment-track span{display:block;height:100%;background:var(--blue)}.segment-row[aria-pressed="true"] .segment-track span{background:var(--green)}.segment-detail{position:sticky;top:96px;background:var(--sheet);border:1px solid var(--rule-strong);padding:20px}.segment-detail h3{font-size:1.125rem;margin:0 0 18px}.segment-detail dl{display:grid;grid-template-columns:1fr 1fr;margin:0}.segment-detail dl div{padding:11px 0;border-top:1px solid var(--rule)}.segment-detail dl div:nth-child(even){padding-left:14px}.segment-detail dt{font-size:.75rem;color:var(--muted)}.segment-detail dd{margin:2px 0 0;font-size:1.125rem;font-weight:650;font-variant-numeric:tabular-nums}.coverage-note{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:28px}.coverage-note div{background:var(--sheet);padding:16px}.coverage-note strong{display:block;color:var(--text)}.coverage-note span{color:var(--muted);font-size:.75rem}.disclosure{margin-top:20px;border:1px solid var(--rule);background:var(--sheet);padding:0 16px}.disclosure summary{min-height:48px;display:flex;align-items:center;color:var(--blue);font-weight:650;cursor:pointer}.table-wrap{overflow-x:auto;padding-bottom:10px}table{width:100%;border-collapse:collapse;background:var(--sheet)}th,td{text-align:left;padding:11px;border-bottom:1px solid var(--rule);vertical-align:top}thead th{color:var(--muted);font-size:.75rem}tbody th{font-weight:600}.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}.filter,.button,.question-nav button{min-height:44px;border:1px solid var(--rule-strong);background:var(--sheet);padding:8px 14px;border-radius:3px;cursor:pointer}.filter:hover,.filter[aria-pressed="true"],.button:hover,.question-nav button:hover{background:var(--sheet-raised);border-color:var(--blue)}.filter[aria-pressed="true"]{color:var(--blue)}.observations{display:grid;gap:10px}.observation{background:var(--sheet);border:1px solid var(--rule);padding:18px}.observation[hidden]{display:none}.observation-meta{display:flex;flex-wrap:wrap;gap:9px;align-items:center;color:var(--muted);font-size:.75rem}.severity,.state,.evidence-state{display:inline-block;border:1px solid currentColor;border-radius:3px;padding:2px 7px;font-size:.75rem}.severity.decision{color:var(--red)}.severity.review{color:var(--amber)}.severity.note,.evidence-state{color:var(--blue)}details{border-top:1px solid var(--rule);margin-top:14px;padding-top:4px}summary{padding:9px 0;cursor:pointer;color:var(--blue);font-weight:650}.mono{font:12px/1.55 Consolas,"SFMono-Regular",monospace;overflow-wrap:anywhere}.question-workspace{max-width:820px}.question-panel{background:var(--sheet);border:1px solid var(--rule-strong);padding:clamp(20px,4vw,38px);min-height:280px;display:flex;flex-direction:column;justify-content:center}.question-panel[hidden]{display:none}.question-reason{color:var(--amber);font-size:.75rem;margin:0 0 18px}.question-panel h3{font-size:clamp(1.75rem,3vw,2.375rem);line-height:1.15;letter-spacing:-.03em;margin:0;max-width:24ch;text-wrap:balance}.question-actions{display:flex;align-items:center;gap:12px;margin-top:28px}.secondary{background:transparent}.question-controls{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:12px}.question-nav{display:flex;gap:8px}.question-nav button:disabled{opacity:.42;cursor:not-allowed}.question-count{font-variant-numeric:tabular-nums;color:var(--muted)}.answers{margin-top:32px}.thesis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule)}.thesis article{background:var(--sheet);padding:22px}.thesis article:first-child{grid-column:1/-1}.thesis p{margin-bottom:0}.empty{color:var(--muted);font-style:italic}.report-status{margin-bottom:20px;color:${thesisReady ? 'var(--green)' : 'var(--red)'}}footer{margin-top:48px;padding-top:20px;color:var(--muted);font-size:.75rem}.toast{position:fixed;right:18px;bottom:18px;z-index:30;background:var(--text);color:var(--ground);padding:10px 14px;border-radius:3px;box-shadow:0 12px 30px color-mix(in srgb,var(--rail) 72%,transparent)}@media(max-width:820px){main{width:min(100% - 28px,1160px);padding-top:28px}.case-header,.source-map{grid-template-columns:1fr}.segment-detail{position:static}.case-spine{margin:0 -14px;padding:0 6px}.case-spine a{grid-template-columns:1fr;grid-template-rows:auto auto;text-align:center;justify-items:center;min-height:68px;padding:8px 4px}.case-spine .step-number{grid-row:auto;width:23px;height:23px;font-size:.75rem}.case-spine small{display:none}.stage{padding:52px 0}.stage-heading{grid-template-columns:46px 1fr}.coverage-note{grid-template-columns:1fr}.thesis{grid-template-columns:1fr}.thesis article:first-child{grid-column:auto}}@media(max-width:520px){h1{font-size:2.375rem}.case-meta{font-size:.75rem}.case-spine strong{font-size:.75rem}.source-map{gap:14px}.segment-row{padding:8px 2px}.segment-detail dl{grid-template-columns:1fr}.segment-detail dl div:nth-child(even){padding-left:0}.question-actions,.question-controls{align-items:stretch}.question-actions{flex-direction:column}.question-actions .button{width:100%}.question-controls{flex-direction:column}.question-nav{width:100%}.question-nav button{flex:1}.question-count{order:-1}.table-wrap{margin-right:-14px}}@media print{.case-spine,.filters,.question-actions,.question-controls,.toast{display:none!important}.stage{break-inside:avoid}.segment-detail{position:static}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+    .concept-round{margin:0 0 28px}.concept-round-head{display:flex;justify-content:space-between;gap:20px;align-items:baseline;margin-bottom:12px}.concept-round-head h3,.concept-round-head p{margin:0}.concept-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:1px;background:var(--rule);border:1px solid var(--rule)}.concept-card{background:var(--sheet);padding:20px}.concept-card[data-selected="true"]{background:var(--sheet-raised);outline:1px solid var(--green);outline-offset:-1px}.concept-card h3{margin:14px 0 8px}.concept-card dl{margin:18px 0 0}.concept-card dl div{padding:9px 0;border-top:1px solid var(--rule)}.concept-card dt{font-size:.75rem;color:var(--muted)}.concept-card dd{margin:3px 0 0}.severity.verified{color:var(--green);margin-left:8px}.concept-decision{margin:12px 0 0;padding:14px;border:1px solid var(--rule);background:var(--sheet)}@media(max-width:520px){.concept-round-head{display:block}.concept-round-head p{margin-top:8px}}
   </style>
 </head>
 <body>
@@ -647,7 +745,7 @@ export function renderHtmlReport(caseFile) {
     <section class="stage" id="ingest" data-stage-section="ingest" aria-labelledby="ingest-title"><div class="stage-heading"><span class="stage-index">Stage 1</span><div><h2 id="ingest-title">See the company landscape</h2><p>Select a source area to understand its weight in the map. This is metadata orientation, not content or permission certification.</p></div></div>${segmentButtons ? `<div class="source-map"><div class="segment-list" aria-label="Company source areas">${segmentButtons}</div><aside class="segment-detail" id="segment-detail" aria-live="polite"><h3 data-segment-name>${escapeHtml(firstSegment?.name ?? '')}</h3><dl><div><dt>Share of map</dt><dd data-segment-share>${firstSegment && enumeratedCount ? ((firstSegment.fileCount / enumeratedCount) * 100).toFixed(1) : '0.0'}%</dd></div><div><dt>Files</dt><dd data-segment-files>${firstSegment?.fileCount.toLocaleString() ?? '0'}</dd></div><div><dt>Folders</dt><dd data-segment-folders>${firstSegment?.folderCount.toLocaleString() ?? '0'}</dd></div><div><dt>Size</dt><dd data-segment-size>${escapeHtml(formatBytes(firstSegment?.totalBytes ?? 0))}</dd></div><div><dt>Evidence retained</dt><dd data-segment-evidence>${firstSegment?.retainedEvidenceCount.toLocaleString() ?? '0'}</dd></div><div><dt>Sensitivity cues</dt><dd data-segment-sensitivity>${(firstSegment?.sensitivityCueCount ?? 0).toLocaleString()}</dd></div><div><dt>Weak names</dt><dd data-segment-weak>${(firstSegment?.weakNameCount ?? 0).toLocaleString()}</dd></div></dl></aside></div>` : '<p class="empty">No hierarchical source map is attached to this case.</p>'}<div class="coverage-note"><div><strong>${enumeratedCount.toLocaleString()} mapped</strong><span>Complete inside the declared local scope</span></div><div><strong>${retainedCount.toLocaleString()} retained</strong><span>Bounded portable evidence, not the full index</span></div><div><strong>${caseFile.coverage.readableContentCount.toLocaleString()} with text</strong><span>Content was ${caseFile.coverage.readableContentCount ? 'partly available' : 'not requested'}</span></div></div><details class="disclosure"><summary>Inspect coverage and source register</summary><p>Complete means complete only inside the declared connector scope. Source-system permissions and version histories remain authoritative.</p><div class="table-wrap"><table><thead><tr><th>Source</th><th>Platform</th><th>Method</th><th>Coverage</th><th>Content</th><th>Permissions</th><th>Versions</th></tr></thead><tbody>${sourceRows}</tbody></table></div>${segmentRows ? `<div class="table-wrap"><table><thead><tr><th>Source area</th><th>Files</th><th>Folders</th><th>Size</th><th>Evidence</th></tr></thead><tbody>${segmentRows}</tbody></table></div>` : ''}</details></section>
     <section class="stage" id="analyse" data-stage-section="analyse" aria-labelledby="analyse-title"><div class="stage-heading"><span class="stage-index">Stage 2</span><div><h2 id="analyse-title">Focus on what could change the decision</h2><p>Filter the deterministic signals. These are observations to investigate, not organisational truth.</p></div></div><div class="filters" aria-label="Filter observations"><button type="button" class="filter" data-filter="all" aria-pressed="true">All · ${caseFile.observations.length}</button><button type="button" class="filter" data-filter="decision" aria-pressed="false">Decision · ${caseFile.observations.filter((item) => item.severity === 'decision').length}</button><button type="button" class="filter" data-filter="review" aria-pressed="false">Review · ${caseFile.observations.filter((item) => item.severity === 'review').length}</button><button type="button" class="filter" data-filter="note" aria-pressed="false">Context · ${caseFile.observations.filter((item) => item.severity === 'note').length}</button></div><div class="observations">${observations}</div></section>
     <section class="stage" id="clarify" data-stage-section="clarify" aria-labelledby="clarify-title"><div class="stage-heading"><span class="stage-index">Stage 3</span><div><h2 id="clarify-title">Ask one consequential question at a time</h2><p>These questions exist because the evidence cannot safely answer them. Record attributed answers in the portable case before finalising the thesis.</p></div></div><div class="question-workspace">${questions}${caseFile.questions.length ? `<div class="question-controls"><span class="question-count" aria-live="polite">Question <strong data-question-current>1</strong> of ${caseFile.questions.length}</span><div class="question-nav"><button type="button" data-question-prev disabled>Previous</button><button type="button" data-question-next${caseFile.questions.length === 1 ? ' disabled' : ''}>Next question</button></div></div>` : ''}</div><div class="answers"><h3>Human-verified answers</h3><div class="observations">${answers}</div></div></section>
-    <section class="stage" id="report" data-stage-section="report" aria-labelledby="report-title"><div class="stage-heading"><span class="stage-index">Stage 4</span><div><h2 id="report-title">Author the architectural thesis</h2><p>The report belongs to the architect. Carry unresolved consequential questions forward explicitly as risks or assumptions.</p></div></div><p class="report-status"><strong>${escapeHtml(statusTitle)}</strong></p><div class="thesis"><article><h3>Diagnostic view</h3>${paragraphHtml(caseFile.thesis.diagnosticView)}</article><article><h3>Recommendation</h3>${paragraphHtml(caseFile.thesis.recommendation)}</article><article><h3>Risks</h3>${paragraphHtml(caseFile.thesis.risks)}</article><article><h3>Next actions</h3>${paragraphHtml(caseFile.thesis.nextActions)}</article></div></section>
+    <section class="stage" id="report" data-stage-section="report" aria-labelledby="report-title"><div class="stage-heading"><span class="stage-index">Stage 4</span><div><h2 id="report-title">Author the architectural thesis</h2><p>The report belongs to the architect. Carry unresolved consequential questions forward explicitly as risks or assumptions.</p></div></div>${conceptRoundHtml}<p class="report-status"><strong>${escapeHtml(statusTitle)}</strong></p><div class="thesis"><article><h3>Diagnostic view</h3>${paragraphHtml(caseFile.thesis.diagnosticView)}</article><article><h3>Recommendation</h3>${paragraphHtml(caseFile.thesis.recommendation)}</article><article><h3>Risks</h3>${paragraphHtml(caseFile.thesis.risks)}</article><article><h3>Next actions</h3>${paragraphHtml(caseFile.thesis.nextActions)}</article></div></section>
     <footer>AI may propose. Humans certify. The architect owns the thesis. Source-system permissions remain authoritative.</footer>
   </main>
   <div class="toast" role="status" hidden data-toast>Question copied</div>

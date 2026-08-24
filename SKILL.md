@@ -92,11 +92,14 @@ Turn only consequential uncertainty into questions for an attributed person. Thi
 
 The report is for a non-technical decision-maker and the architect. Lead with the current thesis and the few decisions that matter, then expose evidence and detail progressively.
 
+When the user asks to draft concepts, compare approaches, explore options, or the evidence supports several materially different interventions, run an optional concept round before finalising the thesis. Keep it inside Report rather than adding a fifth top-level stage. Read [references/concept-round.md](references/concept-round.md) and preserve the round, the user's steer, and the architect's selection in the portable case. Do not run a concept round while consequential access, authority, or ownership questions still block safe comparison.
+
 Include:
 
 - scope and explicit coverage limits;
 - what is confirmed, observed, proposed, human-verified, and still unknown;
 - consequential questions and attributed answers;
+- concept directions, selection rationale, and rejected trade-offs when a concept round was used;
 - the architect's thesis, recommendation, risks, and next actions;
 - source register and provenance;
 - collection timestamps and portability information.

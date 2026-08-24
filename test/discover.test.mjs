@@ -95,6 +95,48 @@ test('report command creates portable Markdown and self-contained dark HTML', as
     const caseFile = ingestSnapshot(snapshot, null, { caseName: 'Aster Row discovery' });
     caseFile.thesis.diagnosticView = 'The operating picture depends on informal authority.';
     caseFile.answers.push({ questionId: 'question-001', questionTitle: 'Who controls the brief?', answer: 'The creative director controls it.', answeredBy: 'Campaign lead', answeredAt: '2026-08-24T12:00:00.000Z', evidenceState: 'human-verified' });
+    caseFile.conceptRounds.push({
+      id: 'concept-round-001',
+      createdAt: '2026-08-24T12:10:00.000Z',
+      trigger: 'Several interventions remain viable.',
+      steer: 'Keep ownership portable.',
+      supersedesRoundId: null,
+      status: 'selected',
+      evidenceState: 'model-proposed',
+      concepts: [{
+        id: 'concept-001',
+        name: 'Governed overlay',
+        thesis: 'Keep source systems in place and add a governed evidence layer.',
+        problem: 'Authority is informal.',
+        peopleChange: 'Teams verify consequential decisions at the point of use.',
+        smallestIntervention: 'Pilot one campaign handover.',
+        evidence: {
+          observationIds: [caseFile.observations[0].id],
+          answerIds: [],
+          recordIds: [caseFile.records[0].id]
+        },
+        assumptions: ['A campaign owner can certify decisions.'],
+        dependencies: ['Named campaign owner'],
+        integrations: ['Local folder adapter'],
+        operatingBurden: 'Weekly verification during the pilot.',
+        costShape: 'Small pilot before connector work.',
+        lockIn: 'Low.',
+        portability: 'Neutral case export.',
+        benefits: ['Keeps current storage.'],
+        tradeOffs: ['Requires human checkpoints.'],
+        reversibility: 'Remove the overlay without moving sources.',
+        killCriteria: ['No decision-quality improvement after the pilot.'],
+        distinctFromOthers: 'Adds governance without replacing storage.',
+        origin: 'model-proposed'
+      }]
+    });
+    caseFile.conceptDecision = {
+      status: 'selected',
+      selectedConceptIds: ['concept-001'],
+      decidedBy: 'Architect',
+      decidedAt: '2026-08-24T12:15:00.000Z',
+      rationale: 'Smallest reversible intervention.'
+    };
     const casePath = path.join(root, 'case.json');
     await writeFile(casePath, JSON.stringify(caseFile));
 
@@ -105,6 +147,7 @@ test('report command creates portable Markdown and self-contained dark HTML', as
     assert.match(markdown, /Coverage boundary/);
     assert.match(markdown, /informal authority/);
     assert.match(markdown, /Campaign lead/);
+    assert.match(markdown, /Governed overlay/);
     assert.match(html, /color-scheme:dark/);
     assert.match(html, /aria-label="Discovery stages"/);
     assert.match(html, /data-stage-link="ingest"/);
@@ -115,9 +158,14 @@ test('report command creates portable Markdown and self-contained dark HTML', as
     assert.match(html, /data-question-next/);
     assert.match(html, /<script>/);
     assert.match(html, /Human-verified answers/);
+    assert.match(html, /Concept round/);
+    assert.match(html, /data-selected="true"/);
     assert.doesNotMatch(html, /https:\/\/[^"']+\.css/);
     assert.match(renderMarkdownReport(caseFile), /Architect thesis/);
     assert.match(renderHtmlReport(caseFile), /Author the architectural thesis/);
+    const invalidConceptEvidence = structuredClone(caseFile);
+    invalidConceptEvidence.conceptRounds[0].concepts[0].evidence.recordIds = ['missing-record'];
+    assert.throws(() => validateCase(invalidConceptEvidence), /references unknown id missing-record/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

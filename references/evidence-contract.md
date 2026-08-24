@@ -53,6 +53,12 @@ A question explains why the uncertainty matters and links to relevant records. A
 
 The thesis is the architect's authored judgement. It may cite observations, answers, and records, but its state remains `architect-conclusion`, never `source-fact`.
 
+### Concept round and decision
+
+A concept round is a preserved set of materially different proposed interventions. Each concept cites the evidence and attributed answers it depends on, states its assumptions and trade-offs, and remains a proposal rather than organisational truth. A later steer creates a new round; it does not overwrite the earlier set.
+
+A concept decision records whether the architect selected, combined, deferred, or rejected concepts. Selection is an architect decision, not human verification of every claim inside the concept. The final thesis should cite selected concept IDs and explain any consequential element borrowed from a rejected concept.
+
 ## Snapshot versus case
 
 `references/schemas/source-snapshot.schema.json` is the adapter boundary for one external source. `references/schemas/case.schema.json` is the portable multi-source case.
@@ -71,4 +77,3 @@ Adapters may keep extra platform metadata inside a record's `metadata` object. D
 ## Validation limits
 
 Schema validation proves structural compatibility only. It does not prove authorisation, source completeness, semantic accuracy, or permission enforcement.
-

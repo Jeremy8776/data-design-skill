@@ -10,6 +10,14 @@ The deterministic core maps authorised local or synced folders without changing 
 
 AI may propose observations and questions. People certify organisational facts. The architect owns the thesis.
 
+## Optional concept round
+
+Once consequential clarifying questions are resolved, ask the skill to **draft concepts** when more than one intervention remains genuinely viable. It produces two to four materially different, evidence-linked directions, including a minimum-change baseline where that is credible.
+
+Each direction exposes its assumptions, operating burden, cost shape, lock-in, portability, trade-offs, reversibility, and kill criteria. The architect can select, combine, steer, defer, or reject the concepts before authoring the final thesis. Earlier rounds remain in the portable case as decision history.
+
+This is a decision tool inside **Report**, not a fifth workflow stage and not an automatic recommendation. See `references/concept-round.md` for the protocol.
+
 ## Requirements
 
 - Node.js 22.13 or newer

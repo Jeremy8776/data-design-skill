@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ai-architecture-discovery/concept-round.schema.json",
+  "title": "AI Architecture Discovery Concept Round",
+  "type": "object",
+  "required": ["id", "createdAt", "trigger", "steer", "status", "concepts", "evidenceState"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "trigger": { "type": "string", "minLength": 1 },
+    "steer": { "type": "string" },
+    "supersedesRoundId": { "type": ["string", "null"] },
+    "status": { "enum": ["open", "selected", "superseded", "rejected", "deferred"] },
+    "evidenceState": { "const": "model-proposed" },
+    "concepts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "thesis", "problem", "peopleChange", "smallestIntervention", "evidence", "assumptions", "dependencies", "integrations", "operatingBurden", "costShape", "lockIn", "portability", "benefits", "tradeOffs", "reversibility", "killCriteria", "distinctFromOthers", "origin"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "thesis": { "type": "string", "minLength": 1 },
+          "problem": { "type": "string", "minLength": 1 },
+          "peopleChange": { "type": "string", "minLength": 1 },
+          "smallestIntervention": { "type": "string", "minLength": 1 },
+          "evidence": {
+            "type": "object",
+            "required": ["observationIds", "answerIds", "recordIds"],
+            "properties": {
+              "observationIds": { "type": "array", "items": { "type": "string" } },
+              "answerIds": { "type": "array", "items": { "type": "string" } },
+              "recordIds": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": false
+          },
+          "assumptions": { "type": "array", "items": { "type": "string" } },
+          "dependencies": { "type": "array", "items": { "type": "string" } },
+          "integrations": { "type": "array", "items": { "type": "string" } },
+          "operatingBurden": { "type": "string" },
+          "costShape": { "type": "string" },
+          "lockIn": { "type": "string" },
+          "portability": { "type": "string" },
+          "benefits": { "type": "array", "items": { "type": "string" } },
+          "tradeOffs": { "type": "array", "items": { "type": "string" } },
+          "reversibility": { "type": "string" },
+          "killCriteria": { "type": "array", "items": { "type": "string" } },
+          "distinctFromOthers": { "type": "string", "minLength": 1 },
+          "origin": { "enum": ["model-proposed", "architect-proposed"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
