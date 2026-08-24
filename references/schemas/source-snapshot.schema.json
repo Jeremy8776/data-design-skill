@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ai-architecture-discovery/source-snapshot.schema.json",
+  "title": "AI Architecture Discovery Source Snapshot",
+  "type": "object",
+  "required": ["snapshotVersion", "source", "records"],
+  "properties": {
+    "snapshotVersion": { "const": "0.1.0" },
+    "source": { "$ref": "#/$defs/source" },
+    "structure": { "type": "object" },
+    "scanPolicy": { "type": "object" },
+    "indexes": { "type": "array", "items": { "type": "object" } },
+    "records": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/record" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "capabilityState": {
+      "enum": ["available", "partial", "unavailable", "unknown", "not-requested"]
+    },
+    "source": {
+      "type": "object",
+      "required": ["id", "platform", "sourceFamily", "displayName", "scope", "collectionMethod", "collectedAt", "capabilities", "coverage"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "platform": { "type": "string", "minLength": 1 },
+        "sourceFamily": { "type": "string", "minLength": 1 },
+        "displayName": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "locator": { "type": ["string", "null"] },
+        "collectionMethod": { "enum": ["native-read-only", "connector-read-only", "synced-folder", "export", "manual", "unknown"] },
+        "collectedAt": { "type": "string", "format": "date-time" },
+        "capabilities": {
+          "type": "object",
+          "required": ["enumeration", "metadata", "content", "permissions", "versions", "stableIds", "changeTracking"],
+          "properties": {
+            "enumeration": { "$ref": "#/$defs/capabilityState" },
+            "metadata": { "$ref": "#/$defs/capabilityState" },
+            "content": { "$ref": "#/$defs/capabilityState" },
+            "permissions": { "$ref": "#/$defs/capabilityState" },
+            "versions": { "$ref": "#/$defs/capabilityState" },
+            "stableIds": { "$ref": "#/$defs/capabilityState" },
+            "changeTracking": { "$ref": "#/$defs/capabilityState" }
+          },
+          "additionalProperties": false
+        },
+        "coverage": {
+          "type": "object",
+          "required": ["status", "notes", "warnings"],
+          "properties": {
+            "status": { "enum": ["complete", "partial", "sampled", "unknown"] },
+            "notes": { "type": "array", "items": { "type": "string" } },
+            "warnings": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "record": {
+      "type": "object",
+      "required": ["externalId", "name", "locator", "recordType", "contentState"],
+      "properties": {
+        "externalId": { "type": ["string", "null"] },
+        "name": { "type": "string", "minLength": 1 },
+        "locator": { "type": "string", "minLength": 1 },
+        "parentLocator": { "type": ["string", "null"] },
+        "recordType": { "type": "string", "minLength": 1 },
+        "mimeType": { "type": ["string", "null"] },
+        "size": { "type": ["integer", "null"], "minimum": 0 },
+        "createdAt": { "type": ["string", "null"] },
+        "modifiedAt": { "type": ["string", "null"] },
+        "version": { "type": ["string", "null"] },
+        "webUrl": { "type": ["string", "null"] },
+        "localPath": { "type": ["string", "null"] },
+        "contentState": { "enum": ["available", "partial", "metadata-only", "unavailable", "not-requested"] },
+        "contentText": { "type": ["string", "null"] },
+        "permissionState": { "enum": ["available", "partial", "unavailable", "unknown", "not-requested"] },
+        "permissions": { "type": "array", "items": { "type": "object" } },
+        "checksum": { "type": ["string", "null"] },
+        "metadata": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ai-architecture-discovery/case.schema.json",
+  "title": "Portable AI Architecture Discovery Case",
+  "type": "object",
+  "required": ["schemaVersion", "caseId", "caseName", "createdAt", "updatedAt", "sources", "records", "observations", "questions", "answers", "thesis", "coverage", "provenance"],
+  "properties": {
+    "schemaVersion": { "enum": ["0.2.0", "0.3.0"] },
+    "caseId": { "type": "string", "minLength": 1 },
+    "caseName": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "sources": { "type": "array", "items": { "type": "object" } },
+    "records": { "type": "array", "items": { "type": "object" } },
+    "observations": { "type": "array", "items": { "type": "object" } },
+    "questions": { "type": "array", "items": { "type": "object" } },
+    "answers": { "type": "array", "items": { "type": "object" } },
+    "structure": { "type": ["object", "null"] },
+    "scanPolicy": { "type": ["object", "null"] },
+    "indexes": { "type": "array", "items": { "type": "object" } },
+    "thesis": { "type": "object" },
+    "coverage": { "type": "object" },
+    "provenance": { "type": "object" }
+  },
+  "additionalProperties": false
+}

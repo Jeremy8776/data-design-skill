@@ -1,0 +1,11 @@
+.portable-install.json
+.env
+.env.*
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+node_modules/
+coverage/
+reports/
+.DS_Store
+Thumbs.db
