@@ -160,6 +160,8 @@ test('report command creates portable Markdown and self-contained dark HTML', as
     assert.match(html, /Human-verified answers/);
     assert.match(html, /Concept round/);
     assert.match(html, /data-selected="true"/);
+    assert.match(html, /The architect thesis is in progress\./);
+    assert.doesNotMatch(html, /The architect thesis is ready for review\./);
     assert.doesNotMatch(html, /https:\/\/[^"']+\.css/);
     assert.match(renderMarkdownReport(caseFile), /Architect thesis/);
     assert.match(renderHtmlReport(caseFile), /Author the architectural thesis/);

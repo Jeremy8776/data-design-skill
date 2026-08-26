@@ -150,21 +150,27 @@ export function renderHtmlReport(caseFile, validateCase) {
   const firstSegment = sortedSegments[0] ?? null;
   const segmentRows = sortedSegments.map((segment) => `<tr><th scope="row">${escapeHtml(segment.name)}</th><td>${segment.fileCount.toLocaleString()}</td><td>${segment.folderCount.toLocaleString()}</td><td>${escapeHtml(formatBytes(segment.totalBytes))}</td><td>${segment.retainedEvidenceCount.toLocaleString()}</td></tr>`).join('');
   const openQuestionCount = caseFile.questions.filter((question) => question.status === 'open').length;
-  const thesisReady = ['diagnosticView', 'recommendation', 'risks', 'nextActions'].some((field) => typeof caseFile.thesis[field] === 'string' && caseFile.thesis[field].trim());
+  const thesisFields = ['diagnosticView', 'recommendation', 'risks', 'nextActions'];
+  const thesisStarted = thesisFields.some((field) => typeof caseFile.thesis[field] === 'string' && caseFile.thesis[field].trim());
+  const thesisReady = caseFile.thesis.status === 'final' && thesisFields.every((field) => typeof caseFile.thesis[field] === 'string' && caseFile.thesis[field].trim());
   const statusTitle = thesisReady
     ? 'The architect thesis is ready for review.'
     : openQuestionCount
       ? `${openQuestionCount.toLocaleString()} clarifying ${openQuestionCount === 1 ? 'question remains' : 'questions remain'} before the thesis.`
-      : latestConceptRound
-        ? 'Concept directions are ready for the architect\'s decision.'
-        : 'Clarification is complete. Draft concepts or author the thesis.';
+      : thesisStarted
+        ? 'The architect thesis is in progress.'
+        : latestConceptRound
+          ? 'Concept directions are ready for the architect\'s decision.'
+          : 'Clarification is complete. Draft concepts or author the thesis.';
   const statusDetail = thesisReady
     ? 'Read the conclusion first, then trace it back through the evidence path.'
     : openQuestionCount
       ? 'The map and observations are orientation. Human answers should resolve the consequential uncertainty before the report becomes a recommendation.'
-      : latestConceptRound
-        ? 'Select, combine, steer, defer, or reject the proposals before the final recommendation.'
-        : 'Use a concept round when several interventions remain viable; skip it when the evidence supports only one safe path.';
+      : thesisStarted
+        ? 'Complete all four thesis fields and attribute the architect before marking the conclusion final.'
+        : latestConceptRound
+          ? 'Select, combine, steer, defer, or reject the proposals before the final recommendation.'
+          : 'Use a concept round when several interventions remain viable; skip it when the evidence supports only one safe path.';
   return `<!doctype html>
 <html lang="en">
 <head>
