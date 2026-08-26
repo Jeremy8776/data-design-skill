@@ -5,7 +5,7 @@
   "type": "object",
   "required": ["schemaVersion", "caseId", "caseName", "createdAt", "updatedAt", "sources", "records", "observations", "questions", "answers", "thesis", "coverage", "provenance"],
   "properties": {
-    "schemaVersion": { "enum": ["0.2.0", "0.3.0", "0.4.0"] },
+    "schemaVersion": { "enum": ["0.2.0", "0.3.0", "0.4.0", "0.5.0"] },
     "caseId": { "type": "string", "minLength": 1 },
     "caseName": { "type": "string", "minLength": 1 },
     "createdAt": { "type": "string", "format": "date-time" },
@@ -20,6 +20,19 @@
     "structure": { "type": ["object", "null"] },
     "scanPolicy": { "type": ["object", "null"] },
     "indexes": { "type": "array", "items": { "type": "object" } },
+    "workflow": {
+      "type": "object",
+      "required": ["version", "status", "currentStage", "updatedAt", "stages", "events"],
+      "properties": {
+        "version": { "type": "string" },
+        "status": { "enum": ["active", "complete"] },
+        "currentStage": { "enum": ["ingest", "analyse", "clarify", "report"] },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "stages": { "type": "object" },
+        "events": { "type": "array", "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
     "thesis": { "type": "object" },
     "coverage": { "type": "object" },
     "provenance": { "type": "object" }

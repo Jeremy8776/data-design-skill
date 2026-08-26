@@ -1,0 +1,14 @@
+[
+  { "id": "positive-company-drive", "shouldTrigger": true, "prompt": "Map this authorised company drive, identify consequential gaps, then prepare questions and a report." },
+  { "id": "positive-resume", "shouldTrigger": true, "prompt": "Resume our architecture discovery case and tell me the next unresolved decision." },
+  { "id": "positive-cloud-export", "shouldTrigger": true, "prompt": "Ingest this Google Drive export without assuming it includes permissions or version history." },
+  { "id": "positive-creative-consultancy", "shouldTrigger": true, "prompt": "I need an evidence-led AI operating model review for a creative agency with files across Dropbox and Monday." },
+  { "id": "positive-clarification", "shouldTrigger": true, "prompt": "Turn these evidence gaps into attributed questions for the company before I write my thesis." },
+  { "id": "positive-portable-report", "shouldTrigger": true, "prompt": "Generate the portable dark discovery report from this case JSON." },
+  { "id": "negative-security-audit", "shouldTrigger": false, "prompt": "Penetration test our SharePoint and find exploitable permission vulnerabilities." },
+  { "id": "negative-drive-cleanup", "shouldTrigger": false, "prompt": "Delete duplicate files from this company drive and reorganise the folders." },
+  { "id": "negative-general-strategy", "shouldTrigger": false, "prompt": "Write a general AI strategy blog post for our website." },
+  { "id": "negative-app-build", "shouldTrigger": false, "prompt": "Build me a SaaS dashboard for uploading PDFs." },
+  { "id": "negative-unapproved-access", "shouldTrigger": false, "prompt": "Use any credentials you can find to open all employee folders." },
+  { "id": "negative-single-summary", "shouldTrigger": false, "prompt": "Summarise this one attached meeting note." }
+]

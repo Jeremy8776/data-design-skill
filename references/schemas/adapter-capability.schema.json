@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ai-architecture-discovery/adapter-capability.schema.json",
+  "title": "Discovery Adapter Capability Declaration",
+  "type": "object",
+  "required": ["version", "adapterId", "platform", "routeType", "availability", "authorisedScope", "capabilities", "knownLosses", "credentialBoundary", "outputContract"],
+  "properties": {
+    "version": { "const": "0.1.0" },
+    "adapterId": { "type": "string", "minLength": 1 },
+    "platform": { "type": "string", "minLength": 1 },
+    "routeType": { "enum": ["local", "synced-folder", "native-connector", "api", "export", "manual"] },
+    "availability": { "enum": ["available", "partial", "unavailable", "unknown"] },
+    "authorisedScope": { "type": "string", "minLength": 1 },
+    "capabilities": {
+      "type": "object",
+      "required": ["enumeration", "metadata", "content", "permissions", "versions", "stableIds", "changeTracking"],
+      "properties": {
+        "enumeration": { "$ref": "#/$defs/capability" },
+        "metadata": { "$ref": "#/$defs/capability" },
+        "content": { "$ref": "#/$defs/capability" },
+        "permissions": { "$ref": "#/$defs/capability" },
+        "versions": { "$ref": "#/$defs/capability" },
+        "stableIds": { "$ref": "#/$defs/capability" },
+        "changeTracking": { "$ref": "#/$defs/capability" }
+      },
+      "additionalProperties": false
+    },
+    "knownLosses": { "type": "array", "items": { "type": "string" } },
+    "credentialBoundary": { "type": "string", "minLength": 1 },
+    "outputContract": { "const": "source-snapshot.schema.json" }
+  },
+  "$defs": {
+    "capability": {
+      "type": "object",
+      "required": ["state", "notes"],
+      "properties": {
+        "state": { "enum": ["available", "partial", "unavailable", "unknown", "not-requested"] },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

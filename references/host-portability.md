@@ -48,7 +48,7 @@ Use the host tool to enumerate the authorised scope, then emit the neutral snaps
 
 ## Custom orchestration
 
-Resolve `scripts/discover.mjs` relative to the loaded skill root, then call it as a deterministic subprocess or import its exported functions. The script makes no network or LLM calls. A custom model adapter can consume the case and return proposals, but it must preserve record citations and `model-proposed` state.
+Resolve `scripts/workbench.mjs` relative to the loaded skill root for the stateful lifecycle. `scripts/discover.mjs` remains the lower-level deterministic evidence and report engine. Neither makes network or LLM calls. A custom model adapter can consume the case and return proposals, but it must preserve record citations and `model-proposed` state.
 
 Do not claim that Cursor, Windsurf, VS Code extensions, or another IDE supports direct skill discovery merely because it can read Markdown. If it does not document the Agent Skills standard, attach `SKILL.md` as an instruction or add a documented host adapter and label that route separately.
 

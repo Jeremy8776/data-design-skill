@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">AI Architecture Discovery</title>
+  <desc id="desc">Four connected stages forming an open evidence path.</desc>
+  <rect width="512" height="512" rx="96" fill="#0f1419"/>
+  <path d="M104 148h104v76H104zm200 0h104v76H304zM104 288h104v76H104zm200 0h104v76H304z" fill="none" stroke="#79a7f2" stroke-width="18"/>
+  <path d="M208 186h96M356 224v64M304 326h-96" fill="none" stroke="#66c69b" stroke-width="18" stroke-linecap="square"/>
+  <circle cx="104" cy="186" r="15" fill="#edf3f5"/>
+  <circle cx="408" cy="326" r="15" fill="#edf3f5"/>
+</svg>
